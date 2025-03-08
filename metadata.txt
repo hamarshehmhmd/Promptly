@@ -1,0 +1,19 @@
+[general]
+name=Promptly
+qgisMinimumVersion=3.0
+description=Execute LLM-generated code for QGIS processing
+version=1.0
+author=Mohammad Hamarsheh
+email=hamarshehmhmd@gmail.com
+about=This plugin provides a simple interface to send prompts to various LLM providers (Ollama, OpenAI, OpenRouter, Anthropic, and custom endpoints) and execute the generated Python code in QGIS. External dependency: Python 'requests' library is required. For Windows users, see https://landscapearchaeology.org/2018/installing-python-packages-in-qgis-3-for-windows/ for installation instructions.
+tracker=https://github.com/hamarshehmhmd/promptly/issues
+repository=https://github.com/hamarshehmhmd/promptly
+homepage=https://github.com/hamarshehmhmd/promptly
+category=Plugins
+icon=icons/icon.png
+hasProcessingProvider=no
+tags=python,llm,ai,ollama,openai,openrouter,anthropic,code generation
+changelog=0.1 - Initial release with support for multiple LLM providers
+experimental=True
+deprecated=False
+server=False 

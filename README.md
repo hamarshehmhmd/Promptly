@@ -34,6 +34,11 @@ A QGIS plugin that provides a simple interface to send prompts to various LLM pr
    - Open QGIS
    - Go to Plugins > Manage and Install Plugins
    - Find "Promptly" in the list and check the box to enable it
+  
+  Another Installation: 
+    Download the Zip File
+    Go to Manage and Install Plugins in QGIS
+    Install From Zip 
 
 ## Usage
 

@@ -246,6 +246,34 @@
           </item>
          </layout>
         </widget>
+        <widget class="QWidget" name="tabErrorLog">
+         <attribute name="title">
+          <string>Error Log</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <widget class="QPlainTextEdit" name="plainTextEditErrorLog">
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="placeholderText">
+             <string>Execution errors will appear here...</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButtonFixCode">
+            <property name="text">
+             <string>Fix Code with LLM</string>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>.</normaloff>.</iconset>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
        </widget>
       </item>
      </layout>

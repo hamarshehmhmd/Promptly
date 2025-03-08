@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 /***************************************************************************
- QGISPromptExecutorDialog
+ Promptly
                                  A QGIS plugin
  Execute LLM-generated code for QGIS processing
 ***************************************************************************/
@@ -12,6 +12,9 @@ import json
 import traceback
 import time
 import threading
+import io
+import sys
+from contextlib import redirect_stdout, redirect_stderr
 
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QProgressBar
@@ -31,6 +34,7 @@ class WorkerSignals(QObject):
     result = pyqtSignal(str, str)  # (full_response, code)
     error = pyqtSignal(str)
     finished = pyqtSignal()
+    error_log = pyqtSignal(str)  # For updating the error log tab
 
 
 class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
@@ -45,7 +49,15 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         # Connect signals
         self.pushButtonSend.clicked.connect(self.send_to_llm)
         self.pushButtonExecute.clicked.connect(self.execute_code)
+        self.pushButtonFixCode.clicked.connect(self.fix_code)
         self.comboBoxProvider.currentIndexChanged.connect(self.on_provider_changed)
+        
+        # Disable fix button initially (until there's an error)
+        self.pushButtonFixCode.setEnabled(False)
+        
+        # Store the last error for code fixing
+        self.last_error = ""
+        self.last_code = ""
         
         # Create progress timer for animated status messages
         self.status_timer = QTimer(self)
@@ -76,6 +88,7 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         # Clear response fields
         self.plainTextEditFullResponse.setPlainText("")
         self.plainTextEditCode.setPlainText("")
+        self.plainTextEditErrorLog.setPlainText("")
         
         # Set initial status
         self.set_status("Ready", "normal")
@@ -145,36 +158,56 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         else:  # Ollama and custom
             return prompt
     
-    def send_to_llm(self):
-        """Send the prompt to the selected LLM provider and retrieve the generated code."""
+    def send_to_llm(self, is_error_fix=False, fix_prompt=None):
+        """
+        Send the prompt to the selected LLM provider and retrieve the generated code.
+        
+        Args:
+            is_error_fix (bool): Whether this is a code-fixing request
+            fix_prompt (str): Optional custom prompt for error fixing
+        """
         # Disable send button to prevent multiple requests
         self.pushButtonSend.setEnabled(False)
+        if is_error_fix:
+            self.pushButtonFixCode.setEnabled(False)
         
-        # Clear previous responses
-        self.plainTextEditFullResponse.setPlainText("")
-        self.plainTextEditCode.setPlainText("")
+        # Clear previous responses if not fixing an error
+        if not is_error_fix:
+            self.plainTextEditFullResponse.setPlainText("")
+            self.plainTextEditCode.setPlainText("")
         
         # Get provider and values from UI
         provider = self.comboBoxProvider.currentText()
         api_endpoint = self.lineEditServer.text()
         api_key = self.lineEditApiKey.text()
         model = self.lineEditModel.text()
-        prompt = self.plainTextEditPrompt.toPlainText()
+        
+        # Use the provided fix prompt or get the prompt from the UI
+        if is_error_fix and fix_prompt:
+            prompt = fix_prompt
+        else:
+            prompt = self.plainTextEditPrompt.toPlainText()
+            
         temperature = self.doubleSpinBoxTemperature.value()
         max_tokens = self.spinBoxMaxTokens.value()
         
         if not prompt:
             self.set_status("No prompt entered - please type a prompt first", "error")
             self.pushButtonSend.setEnabled(True)
+            if is_error_fix:
+                self.pushButtonFixCode.setEnabled(True)
             return
         
         if provider != "Ollama" and not api_key:
             self.set_status(f"API key is required for {provider}", "error")
             self.pushButtonSend.setEnabled(True)
+            if is_error_fix:
+                self.pushButtonFixCode.setEnabled(True)
             return
         
         # Set initial status
-        self.set_status(f"Sending request to {provider} ({model})", "progress")
+        operation_name = "fixing code" if is_error_fix else "sending request"
+        self.set_status(f"{operation_name.capitalize()} to {provider} ({model})", "progress")
             
         try:
             import requests
@@ -253,9 +286,16 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             
             # Connect signals to handlers
             worker_signals.status.connect(self.handle_status_update)
-            worker_signals.result.connect(self.handle_result)
+            worker_signals.result.connect(
+                lambda full, code: self.handle_result(full, code, is_error_fix)
+            )
             worker_signals.error.connect(self.handle_error)
-            worker_signals.finished.connect(lambda: self.pushButtonSend.setEnabled(True))
+            worker_signals.error_log.connect(self.handle_error_log)
+            
+            if is_error_fix:
+                worker_signals.finished.connect(lambda: self.pushButtonFixCode.setEnabled(True))
+            else:
+                worker_signals.finished.connect(lambda: self.pushButtonSend.setEnabled(True))
             
             # Define the worker function
             def worker_function():
@@ -325,7 +365,10 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
                         
                         # Signal appropriate status
                         if python_code:
-                            worker_signals.status.emit("Code found in response - ready to execute", "success")
+                            if is_error_fix:
+                                worker_signals.status.emit("Fixed code received - ready to execute", "success")
+                            else:
+                                worker_signals.status.emit("Code found in response - ready to execute", "success")
                         else:
                             worker_signals.status.emit(
                                 "Response received, but no Python code block found. See Full Response tab.", 
@@ -368,26 +411,78 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             self.plainTextEditFullResponse.setPlainText(f"An error occurred while starting the request:\n\n{error_msg}\n\n{traceback.format_exc()}")
             QgsMessageLog.logMessage(f"Error in send_to_llm: {str(e)}\n{traceback.format_exc()}", level=Qgis.Critical)
             self.pushButtonSend.setEnabled(True)
+            if is_error_fix:
+                self.pushButtonFixCode.setEnabled(True)
+    
+    def fix_code(self):
+        """Send the error and current code to the LLM to get a fix."""
+        if not self.last_error or not self.last_code:
+            self.set_status("No error to fix", "warning")
+            return
+            
+        # Create a specialized prompt for code fixing
+        fix_prompt = f"""I need help fixing an error in this QGIS Python code:
+
+```python
+{self.last_code}
+```
+
+The error I encountered is:
+```
+{self.last_error}
+```
+
+Please provide a corrected version of the code that fixes this error.
+Only return the corrected code in a Python code block (enclosed in ```python and ```).
+"""
+        
+        # Send the fix prompt to the LLM
+        self.send_to_llm(is_error_fix=True, fix_prompt=fix_prompt)
     
     def handle_status_update(self, message, status_type):
         """Handle status updates from the worker thread"""
         self.set_status(message, status_type)
         
-    def handle_result(self, full_response, code):
-        """Handle results from the worker thread"""
-        self.plainTextEditFullResponse.setPlainText(full_response)
-        self.plainTextEditCode.setPlainText(code)
+    def handle_result(self, full_response, code, is_error_fix=False):
+        """
+        Handle results from the worker thread
         
-        # Switch to the appropriate tab
+        Args:
+            full_response (str): Complete response from the LLM
+            code (str): Extracted Python code
+            is_error_fix (bool): Whether this is a result from error fixing
+        """
+        self.plainTextEditFullResponse.setPlainText(full_response)
+        
         if code:
-            self.tabWidgetResponse.setCurrentIndex(1)  # Code tab
+            self.plainTextEditCode.setPlainText(code)
+            self.last_code = code  # Save for potential error fixing
+            
+            # Switch to the appropriate tab
+            if is_error_fix:
+                # For error fix results, show the code tab
+                self.tabWidgetResponse.setCurrentIndex(1)  # Code tab
+            else:
+                self.tabWidgetResponse.setCurrentIndex(1)  # Code tab
         else:
+            if not is_error_fix:
+                # Only clear the code if this is not an error fix
+                self.plainTextEditCode.setPlainText("")
+                
+            # Switch to the full response tab
             self.tabWidgetResponse.setCurrentIndex(0)  # Full response tab
             
     def handle_error(self, error_message):
         """Handle errors from the worker thread"""
         self.plainTextEditFullResponse.setPlainText(error_message)
         self.tabWidgetResponse.setCurrentIndex(0)  # Show full response tab
+    
+    def handle_error_log(self, error_log):
+        """Update the error log tab with new error information"""
+        self.plainTextEditErrorLog.setPlainText(error_log)
+        self.last_error = error_log  # Save for potential error fixing
+        self.pushButtonFixCode.setEnabled(True)  # Enable the fix button
+        self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
             
     def execute_code(self):
         """Execute the Python code in the QGIS environment."""
@@ -403,16 +498,60 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             # Disable button during execution
             self.pushButtonExecute.setEnabled(False)
             
-            # Execute the code
-            exec(code)
+            # Save the code for potential error fixing
+            self.last_code = code
             
-            self.set_status("Code executed successfully", "success")
-            QMessageBox.information(self, "Success", "Code executed successfully!")
-        except Exception as e:
-            error_msg = f"Error executing code: {str(e)}"
-            self.set_status(error_msg, "error")
-            QgsMessageLog.logMessage(f"{error_msg}\n{traceback.format_exc()}", level=Qgis.Critical)
-            QMessageBox.critical(self, "Error", error_msg)
+            # Clear previous error log
+            self.plainTextEditErrorLog.setPlainText("")
+            self.last_error = ""
+            self.pushButtonFixCode.setEnabled(False)
+            
+            # Capture stdout and stderr
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
+            
+            # Execute with output capturing
+            try:
+                with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+                    exec(code)
+                
+                stdout_output = stdout_buffer.getvalue()
+                stderr_output = stderr_buffer.getvalue()
+                
+                # Check for any stderr output
+                if stderr_output:
+                    # If there's stderr, consider it an error
+                    self.set_status("Code executed with errors", "warning")
+                    error_log = f"STDERR Output:\n{stderr_output}\n\nSTDOUT Output:\n{stdout_output}"
+                    self.plainTextEditErrorLog.setPlainText(error_log)
+                    self.last_error = error_log
+                    self.pushButtonFixCode.setEnabled(True)
+                    self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
+                    QMessageBox.warning(self, "Execution Warning", "Code executed with warnings or errors. See Error Log tab.")
+                else:
+                    # If stdout has content, show it in the error log tab as information
+                    if stdout_output:
+                        self.plainTextEditErrorLog.setPlainText(f"Code executed successfully.\n\nOutput:\n{stdout_output}")
+                        self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
+                    
+                    self.set_status("Code executed successfully", "success")
+                    QMessageBox.information(self, "Success", "Code executed successfully!")
+            
+            except Exception as e:
+                error_msg = f"Error executing code: {str(e)}"
+                tb_str = traceback.format_exc()
+                error_log = f"{error_msg}\n\n{tb_str}\n\nSTDOUT Output:\n{stdout_buffer.getvalue()}"
+                
+                # Update error log and switch to it
+                self.plainTextEditErrorLog.setPlainText(error_log)
+                self.last_error = error_log
+                self.pushButtonFixCode.setEnabled(True)
+                self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
+                
+                self.set_status(error_msg, "error")
+                QgsMessageLog.logMessage(f"{error_msg}\n{tb_str}", level=Qgis.Critical)
+                QMessageBox.critical(self, "Error", error_msg)
+        
         finally:
             # Re-enable button
             self.pushButtonExecute.setEnabled(True) 

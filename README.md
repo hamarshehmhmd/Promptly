@@ -40,6 +40,8 @@ A QGIS plugin that provides a simple interface to send prompts to various LLM pr
 1. Download the ZIP file.
 2. Install via **Plugins > Manage and Install Plugins > Install from ZIP**.
 
+''' This Plugin Will soon be available on the QGIS plugin store for easier installation'''
+
 ## Usage
 
 1. Open **Plugins > Promptly** or click the toolbar icon.

@@ -20,7 +20,10 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QProgressBar
 from qgis.PyQt.QtCore import Qt, QTimer, QObject, pyqtSignal
 from qgis.PyQt.QtGui import QColor
-from qgis.core import QgsMessageLog, Qgis
+from qgis.core import QgsMessageLog, Qgis, QgsProviderRegistry, QgsProviderMetadata, QgsDataSourceUri
+from qgis.utils import iface, qgsfunction, plugins
+from qgis.core import QgsProject, QgsApplication, QgsVectorLayer, QgsRasterLayer, QgsFeature
+from PyQt5.QtWidgets import QMessageBox
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -51,6 +54,13 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         self.pushButtonExecute.clicked.connect(self.execute_code)
         self.pushButtonFixCode.clicked.connect(self.fix_code)
         self.comboBoxProvider.currentIndexChanged.connect(self.on_provider_changed)
+        self.pushButtonCancel.clicked.connect(self.cancel_request)
+        
+        # Connect database-related signals
+        self.pushButtonRefreshDatabases.clicked.connect(self.refresh_databases)
+        
+        # Connect layer-related signals
+        self.pushButtonRefreshLayers.clicked.connect(self.refresh_layers)
         
         # Disable fix button initially (until there's an error)
         self.pushButtonFixCode.setEnabled(False)
@@ -58,6 +68,10 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         # Store the last error for code fixing
         self.last_error = ""
         self.last_code = ""
+        
+        # Add variables to track request status
+        self.current_thread = None
+        self.request_canceled = False
         
         # Create progress timer for animated status messages
         self.status_timer = QTimer(self)
@@ -89,6 +103,12 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         self.plainTextEditFullResponse.setPlainText("")
         self.plainTextEditCode.setPlainText("")
         self.plainTextEditErrorLog.setPlainText("")
+        
+        # Initialize database list
+        self.refresh_databases()
+        
+        # Initialize layer list
+        self.refresh_layers()
         
         # Set initial status
         self.set_status("Ready", "normal")
@@ -150,12 +170,107 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         self.set_status(f"Provider changed to {provider}", "normal")
         
     def _format_prompt_for_provider(self, provider, prompt):
-        """Format the prompt based on the provider requirements."""
-        if provider == "OpenAI" or provider == "OpenRouter":
+        """Format the prompt based on the provider's expected format"""
+        # Check if a database is selected and add schema information
+        db_selection = self.comboBoxSqlDatabase.currentText()
+        db_schema = None
+        
+        if db_selection != "None":
+            self.set_status(f"Getting schema for {db_selection}...", "progress")
+            db_schema = self.get_database_schema(db_selection)
+            
+            if db_schema:
+                # Add database schema info to the prompt
+                prompt += f"\n\nReference database schema ({db_selection}):\n```json\n{json.dumps(db_schema, indent=2)}\n```\nPlease use this database schema as a reference for any SQL queries."
+
+        # Check if a layer is selected and add metadata information
+        layer_selection = self.comboBoxLayer.currentText()
+        layer_metadata = None
+        
+        if layer_selection != "None":
+            self.set_status(f"Getting metadata for {layer_selection}...", "progress")
+            layer_metadata = self.get_layer_metadata(layer_selection)
+            
+            if layer_metadata:
+                # Add layer metadata info to the prompt
+                prompt += f"\n\nReference layer metadata ({layer_selection}):\n```json\n{json.dumps(layer_metadata, indent=2)}\n```\nPlease use this layer as a reference for your QGIS code. The user has selected this specific layer to work with."
+
+        # Add QGIS-specific context and coding guidance
+        qgis_context = """
+Please follow these guidelines when generating QGIS code:
+
+1. Always include necessary QGIS imports at the top of your code (note the correct locations):
+   - from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateReferenceSystem, Qgis
+   - from qgis.utils import iface
+   - from PyQt5.QtCore import Qt, QVariant
+   - from PyQt5.QtGui import QColor
+   - from PyQt5.QtWidgets import QMessageBox, QInputDialog, QDialog, QComboBox
+
+2. IMPORTANT IMPORT RULES:
+   - Qgis (with the enums like Qgis.Info) is imported from qgis.core, NOT from PyQt5
+   - Message bars are accessed through iface.messageBar(), NOT through a QgsMessageBar class
+
+3. When your code involves modifying the map canvas or project:
+   - Reference the current project with QgsProject.instance()
+   - Use iface for user interface operations
+   - Always call refresh operations like iface.mapCanvas().refresh() when making visual changes
+   
+4. For adding layers to the map:
+   - Use QgsProject.instance().addMapLayer(layer) or addMapLayers([layers])
+   - Ensure layers have proper CRS settings
+   
+5. For user notifications:
+   - Use iface.messageBar().pushMessage("Title", "Message", level=Qgis.Info)
+   - Do NOT use QgsMessageBar directly
+   
+6. For USER INTERACTION and LAYER SELECTION:
+   - If a specific layer has been pre-selected in the dropdown, use that layer directly
+   - For additional layer selection needs, allow the user to select a layer using:
+     ```python
+     layer_names = [layer.name() for layer in QgsProject.instance().mapLayers().values()]
+     layer_name, ok = QInputDialog.getItem(None, "Select Layer", "Choose a layer:", layer_names, 0, False)
+     if ok and layer_name:
+         selected_layer = next((layer for layer in QgsProject.instance().mapLayers().values() if layer.name() == layer_name), None)
+         if selected_layer:
+             # Proceed with the selected layer
+     ```
+   
+7. USING THE SELECTED LAYER:
+   - If a layer has been pre-selected in the dropdown, access it directly with:
+     ```python
+     # Get the selected layer by name
+     layer_name = "LAYER_NAME_HERE"  # Replace with the name from the metadata
+     selected_layer = None
+     for lyr in QgsProject.instance().mapLayers().values():
+         if lyr.name() == layer_name:
+             selected_layer = lyr
+             break
+             
+     if selected_layer:
+         # Work with the selected layer
+         # Example: count features, process attributes, etc.
+     else:
+         iface.messageBar().pushMessage("Error", f"Layer '{layer_name}' not found", level=Qgis.Warning)
+     ```
+   
+8. When executing complex operations:
+   - Consider wrapping in try/except blocks
+   - Add progress messages for user feedback
+   
+Provide complete, self-contained code that will run in the QGIS Python environment.
+"""
+        prompt += "\n\n" + qgis_context
+        
+        # Format the prompt based on provider
+        if provider == "Ollama":
+            return prompt
+        elif provider in ["OpenAI", "OpenRouter"]:
             return [{"role": "user", "content": prompt}]
         elif provider == "Anthropic":
             return {"role": "user", "content": prompt}
-        else:  # Ollama and custom
+        elif provider == "Custom":
+            return {"role": "user", "content": prompt}
+        else:
             return prompt
     
     def send_to_llm(self, is_error_fix=False, fix_prompt=None):
@@ -166,8 +281,13 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             is_error_fix (bool): Whether this is a code-fixing request
             fix_prompt (str): Optional custom prompt for error fixing
         """
-        # Disable send button to prevent multiple requests
+        # Reset cancel flag
+        self.request_canceled = False
+        
+        # Disable send button and enable cancel button
         self.pushButtonSend.setEnabled(False)
+        self.pushButtonCancel.setEnabled(True)
+        
         if is_error_fix:
             self.pushButtonFixCode.setEnabled(False)
         
@@ -194,6 +314,7 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         if not prompt:
             self.set_status("No prompt entered - please type a prompt first", "error")
             self.pushButtonSend.setEnabled(True)
+            self.pushButtonCancel.setEnabled(False)
             if is_error_fix:
                 self.pushButtonFixCode.setEnabled(True)
             return
@@ -201,6 +322,7 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
         if provider != "Ollama" and not api_key:
             self.set_status(f"API key is required for {provider}", "error")
             self.pushButtonSend.setEnabled(True)
+            self.pushButtonCancel.setEnabled(False)
             if is_error_fix:
                 self.pushButtonFixCode.setEnabled(True)
             return
@@ -293,13 +415,22 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             worker_signals.error_log.connect(self.handle_error_log)
             
             if is_error_fix:
-                worker_signals.finished.connect(lambda: self.pushButtonFixCode.setEnabled(True))
+                worker_signals.finished.connect(lambda: self.handle_request_finished(True))
             else:
-                worker_signals.finished.connect(lambda: self.pushButtonSend.setEnabled(True))
+                worker_signals.finished.connect(lambda: self.handle_request_finished(False))
+            
+            # Store reference to current thread for cancellation
+            self.current_thread = None
             
             # Define the worker function
             def worker_function():
                 """Worker function that runs in a separate thread"""
+                # Check if canceled before making the request
+                if self.request_canceled:
+                    worker_signals.status.emit("Request canceled", "warning")
+                    worker_signals.finished.emit()
+                    return
+                    
                 try:
                     # Send request to the API
                     response = requests.post(api_endpoint, headers=headers, json=payload, timeout=120)
@@ -307,6 +438,12 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
                     # Process response based on provider
                     llm_output = ""
                     raw_response = ""
+                    
+                    # Check if canceled after the request but before processing
+                    if self.request_canceled:
+                        worker_signals.status.emit("Request canceled", "warning")
+                        worker_signals.finished.emit()
+                        return
                     
                     if response.status_code == 200:
                         # Signal processing status
@@ -342,6 +479,12 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
                                     llm_output = str(response_json)
                             except:
                                 llm_output = response.text
+                        
+                        # Final cancel check before finalizing result
+                        if self.request_canceled:
+                            worker_signals.status.emit("Request canceled", "warning")
+                            worker_signals.finished.emit()
+                            return
                         
                         # If we still don't have output, try to use the raw response
                         if not llm_output.strip():
@@ -403,6 +546,7 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             
             # Run the worker function in a separate thread
             thread = threading.Thread(target=worker_function, daemon=True)
+            self.current_thread = thread
             thread.start()
             
         except Exception as e:
@@ -410,9 +554,26 @@ class QGISPromptExecutorDialog(QDialog, FORM_CLASS):
             self.set_status(f"Error: {str(e)[:50]}...", "error")
             self.plainTextEditFullResponse.setPlainText(f"An error occurred while starting the request:\n\n{error_msg}\n\n{traceback.format_exc()}")
             QgsMessageLog.logMessage(f"Error in send_to_llm: {str(e)}\n{traceback.format_exc()}", level=Qgis.Critical)
-            self.pushButtonSend.setEnabled(True)
-            if is_error_fix:
-                self.pushButtonFixCode.setEnabled(True)
+            self.handle_request_finished(is_error_fix)
+    
+    def cancel_request(self):
+        """Cancel the current LLM request"""
+        if self.current_thread and self.current_thread.is_alive():
+            self.request_canceled = True
+            self.set_status("Canceling request...", "warning")
+            QgsMessageLog.logMessage("User canceled LLM request", level=Qgis.Info)
+    
+    def handle_request_finished(self, is_error_fix=False):
+        """Handle cleanup when request is finished (success or canceled)"""
+        # Re-enable send button and disable cancel button
+        self.pushButtonSend.setEnabled(True)
+        self.pushButtonCancel.setEnabled(False)
+        
+        if is_error_fix:
+            self.pushButtonFixCode.setEnabled(True)
+        
+        # Clear thread reference
+        self.current_thread = None
     
     def fix_code(self):
         """Send the error and current code to the LLM to get a fix."""
@@ -438,7 +599,467 @@ Only return the corrected code in a Python code block (enclosed in ```python and
         
         # Send the fix prompt to the LLM
         self.send_to_llm(is_error_fix=True, fix_prompt=fix_prompt)
+
+    def execute_code(self):
+        """Execute the Python code in the QGIS environment."""
+        code = self.plainTextEditCode.toPlainText()
+        
+        if not code:
+            self.set_status("No code to execute", "error")
+            return
+            
+        try:
+            self.set_status("Executing code...", "progress")
+            
+            # Disable button during execution
+            self.pushButtonExecute.setEnabled(False)
+            
+            # Save the code for potential error fixing
+            self.last_code = code
+            
+            # Clear previous error log
+            self.plainTextEditErrorLog.setPlainText("")
+            self.last_error = ""
+            self.pushButtonFixCode.setEnabled(False)
+            
+            # Create a clean namespace for execution
+            # First include standard modules that might be needed
+            execution_namespace = {
+                '__builtins__': __builtins__,
+                'os': os,
+                'sys': sys,
+                'json': json,
+                'time': time,
+                'io': io,
+                'traceback': traceback,
+            }
+            
+            # Add QGIS-specific modules and objects with proper imports
+            from qgis.utils import iface, qgsfunction, plugins
+            from qgis.core import (QgsProject, QgsApplication, QgsVectorLayer, QgsRasterLayer, 
+                                  QgsFeature, QgsGeometry, QgsCoordinateReferenceSystem, 
+                                  QgsCoordinateTransform, QgsField, QgsFields, Qgis)
+            from qgis.PyQt.QtCore import Qt, QVariant
+            from qgis.PyQt.QtWidgets import QMessageBox, QInputDialog, QDialog, QComboBox
+            from qgis.PyQt.QtGui import QColor
+            
+            # Add all these imports to the namespace
+            execution_namespace.update({
+                # Core QGIS modules
+                'QgsProject': QgsProject,
+                'QgsApplication': QgsApplication,
+                'QgsVectorLayer': QgsVectorLayer,
+                'QgsRasterLayer': QgsRasterLayer,
+                'QgsFeature': QgsFeature,
+                'QgsGeometry': QgsGeometry,
+                'QgsCoordinateReferenceSystem': QgsCoordinateReferenceSystem,
+                'QgsCoordinateTransform': QgsCoordinateTransform,
+                'QgsField': QgsField,
+                'QgsFields': QgsFields,
+                'Qgis': Qgis,  # Important for message levels like Qgis.Info, Qgis.Warning
+                
+                # Main QGIS interfaces
+                'iface': iface,
+                'project': QgsProject.instance(),
+                'plugins': plugins,
+                
+                # Qt classes
+                'Qt': Qt,
+                'QVariant': QVariant,
+                'QColor': QColor,
+                'QMessageBox': QMessageBox,
+                'QInputDialog': QInputDialog,  # For layer selection
+                'QDialog': QDialog,
+                'QComboBox': QComboBox,
+                
+                # Common helper functions
+                'getLayerByName': lambda name: next((l for l in QgsProject.instance().mapLayers().values() if l.name() == name), None),
+                'getActiveLayer': lambda: iface.activeLayer(),
+                'addLayer': lambda layer: QgsProject.instance().addMapLayer(layer),
+                'removeLayer': lambda layer: QgsProject.instance().removeMapLayer(layer),
+                'refresh': lambda: iface.mapCanvas().refresh(),
+                'message': lambda title, msg="", level=Qgis.Info: iface.messageBar().pushMessage(title, msg, level=level),
+                'getAllLayers': lambda: list(QgsProject.instance().mapLayers().values()),
+                'getAllLayerNames': lambda: [layer.name() for layer in QgsProject.instance().mapLayers().values()],
+                'selectLayerByName': lambda title="Select Layer", prompt="Choose a layer:": _select_layer_from_list(title, prompt)
+            })
+            
+            # Helper function for layer selection
+            def _select_layer_from_list(title="Select Layer", prompt="Choose a layer:"):
+                """Allow the user to select a layer from the current project"""
+                layer_names = [layer.name() for layer in QgsProject.instance().mapLayers().values()]
+                if not layer_names:
+                    return None
+                    
+                layer_name, ok = QInputDialog.getItem(None, title, prompt, layer_names, 0, False)
+                if ok and layer_name:
+                    return next((layer for layer in QgsProject.instance().mapLayers().values() 
+                                 if layer.name() == layer_name), None)
+                return None
+                
+            # Add the helper function to the namespace
+            execution_namespace['_select_layer_from_list'] = _select_layer_from_list
+            
+            # Also add proper module imports to make import statements work
+            execution_namespace.update({
+                'qgis': __import__('qgis'),
+                'qgis.core': __import__('qgis.core'),
+                'qgis.utils': __import__('qgis.utils'),
+                'qgis.PyQt': __import__('qgis.PyQt'),
+                'PyQt5': __import__('PyQt5'),
+                'PyQt5.QtCore': __import__('PyQt5.QtCore'),
+                'PyQt5.QtGui': __import__('PyQt5.QtGui'),
+                'PyQt5.QtWidgets': __import__('PyQt5.QtWidgets'),
+            })
+            
+            # Capture stdout and stderr
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
+            
+            # Execute with output capturing
+            try:
+                with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+                    # Execute the code with the custom namespace
+                    exec(code, execution_namespace)
+                
+                stdout_output = stdout_buffer.getvalue()
+                stderr_output = stderr_buffer.getvalue()
+                
+                # Check for any stderr output
+                if stderr_output:
+                    # If there's stderr, consider it an error
+                    self.set_status("Code executed with errors", "warning")
+                    error_log = f"STDERR Output:\n{stderr_output}\n\nSTDOUT Output:\n{stdout_output}"
+                    self.plainTextEditErrorLog.setPlainText(error_log)
+                    self.last_error = error_log
+                    self.pushButtonFixCode.setEnabled(True)
+                    self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
+                    QMessageBox.warning(self, "Execution Warning", "Code executed with warnings or errors. See Error Log tab.")
+                else:
+                    # If stdout has content, show it in the error log tab as information
+                    if stdout_output:
+                        self.plainTextEditErrorLog.setPlainText(f"Code executed successfully.\n\nOutput:\n{stdout_output}")
+                        self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
+                    
+                    self.set_status("Code executed successfully", "success")
+                    QMessageBox.information(self, "Success", "Code executed successfully!")
+                    
+                    # Force refresh of the QGIS canvas to show any changes
+                    iface.mapCanvas().refresh()
+            
+            except Exception as e:
+                error_msg = f"Error executing code: {str(e)}"
+                tb_str = traceback.format_exc()
+                error_log = f"{error_msg}\n\n{tb_str}\n\nSTDOUT Output:\n{stdout_buffer.getvalue()}"
+                
+                # Update error log and switch to it
+                self.plainTextEditErrorLog.setPlainText(error_log)
+                self.last_error = error_log
+                self.pushButtonFixCode.setEnabled(True)
+                self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
+                
+                self.set_status(error_msg, "error")
+                QgsMessageLog.logMessage(f"{error_msg}\n{tb_str}", level=Qgis.Critical)
+                QMessageBox.critical(self, "Error", error_msg)
+        
+        finally:
+            # Re-enable button
+            self.pushButtonExecute.setEnabled(True)
+            
+            # Force refresh of the canvas to show any changes
+            try:
+                iface.mapCanvas().refresh()
+            except:
+                pass
+                
+    def refresh_databases(self):
+        """Fetch and populate the database dropdown with available SQL databases"""
+        try:
+            self.set_status("Refreshing database list...", "progress")
+            
+            # Clear the database dropdown (keeping only the 'None' option at index 0)
+            while self.comboBoxSqlDatabase.count() > 1:
+                self.comboBoxSqlDatabase.removeItem(1)
+            
+            # Get available database connections
+            # Check for spatialite/sqlite databases
+            spatialite_provider = QgsProviderRegistry.instance().providerMetadata('spatialite')
+            if spatialite_provider:
+                for conn_name in spatialite_provider.connections():
+                    self.comboBoxSqlDatabase.addItem(f"SpatiaLite: {conn_name}")
+            
+            # Check for PostgreSQL/PostGIS databases
+            postgres_provider = QgsProviderRegistry.instance().providerMetadata('postgres')
+            if postgres_provider:
+                for conn_name in postgres_provider.connections():
+                    self.comboBoxSqlDatabase.addItem(f"PostgreSQL: {conn_name}")
+            
+            # Check for MSSQL databases
+            mssql_provider = QgsProviderRegistry.instance().providerMetadata('mssql')
+            if mssql_provider:
+                for conn_name in mssql_provider.connections():
+                    self.comboBoxSqlDatabase.addItem(f"MSSQL: {conn_name}")
+            
+            # Check for OGR (for various other DB types)
+            ogr_provider = QgsProviderRegistry.instance().providerMetadata('ogr')
+            if ogr_provider:
+                for conn_name in ogr_provider.connections():
+                    if 'sqlite' in conn_name.lower():
+                        self.comboBoxSqlDatabase.addItem(f"SQLite: {conn_name}")
+            
+            self.set_status("Database list refreshed", "success")
+            
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error refreshing databases: {str(e)}\n{traceback.format_exc()}", 
+                                    level=Qgis.Critical)
+            self.set_status(f"Error refreshing databases: {str(e)[:50]}...", "error")
     
+    def refresh_layers(self):
+        """Fetch and populate the layer dropdown with available layers from the current project"""
+        try:
+            self.set_status("Refreshing layer list...", "progress")
+            
+            # Clear the layer dropdown (keeping only the 'None' option at index 0)
+            while self.comboBoxLayer.count() > 1:
+                self.comboBoxLayer.removeItem(1)
+            
+            # Get layers from current project
+            project = QgsProject.instance()
+            layers = project.mapLayers().values()
+            
+            # Add vector layers first (grouped by geometry type)
+            vector_layers = {}
+            for layer in layers:
+                if layer.type() == QgsVectorLayer.VectorLayer:
+                    # Get the geometry type name
+                    if hasattr(layer, 'geometryType'):
+                        geom_type = layer.geometryType()
+                        geom_name = "Unknown"
+                        
+                        if geom_type == 0:
+                            geom_name = "Point"
+                        elif geom_type == 1:
+                            geom_name = "Line"
+                        elif geom_type == 2:
+                            geom_name = "Polygon"
+                        elif geom_type == 3:
+                            geom_name = "NoGeometry"
+                        elif geom_type == 4:
+                            geom_name = "Multi"
+                            
+                        if geom_name not in vector_layers:
+                            vector_layers[geom_name] = []
+                        
+                        vector_layers[geom_name].append(layer)
+            
+            # Add vector layers grouped by geometry type
+            for geom_name, layers_list in vector_layers.items():
+                for layer in layers_list:
+                    self.comboBoxLayer.addItem(f"{geom_name}: {layer.name()}")
+            
+            # Add raster layers
+            for layer in layers:
+                if layer.type() == QgsRasterLayer.RasterLayer:
+                    self.comboBoxLayer.addItem(f"Raster: {layer.name()}")
+            
+            self.set_status("Layer list refreshed", "success")
+            
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error refreshing layers: {str(e)}\n{traceback.format_exc()}", 
+                                    level=Qgis.Critical)
+            self.set_status(f"Error refreshing layers: {str(e)[:50]}...", "error")
+    
+    def get_database_schema(self, db_selection):
+        """Get schema information from the selected database"""
+        if db_selection == "None":
+            return None
+        
+        try:
+            # Parse the database selection (format is "Provider: connection_name")
+            provider_type, conn_name = db_selection.split(": ", 1)
+            
+            schema_info = {"tables": [], "database_type": provider_type}
+            
+            if provider_type == "PostgreSQL":
+                provider = QgsProviderRegistry.instance().providerMetadata('postgres')
+                connection = provider.findConnection(conn_name)
+                if connection:
+                    # Get list of schemas
+                    schemas = connection.schemas()
+                    
+                    # For each schema, get the tables
+                    for schema in schemas:
+                        tables = connection.tables(schema)
+                        for table in tables:
+                            # Get table columns (fields)
+                            uri = QgsDataSourceUri(connection.uri())
+                            uri.setSchema(schema)
+                            uri.setTable(table)
+                            
+                            conn = provider.createConnection(uri.uri(), {})
+                            fields = conn.fields(schema, table)
+                            
+                            columns = []
+                            for field in fields:
+                                columns.append({
+                                    "name": field.name(),
+                                    "type": field.typeName()
+                                })
+                            
+                            schema_info["tables"].append({
+                                "schema": schema,
+                                "name": table,
+                                "columns": columns
+                            })
+            
+            elif provider_type == "SpatiaLite" or provider_type == "SQLite":
+                provider_key = 'spatialite' if provider_type == "SpatiaLite" else 'ogr'
+                provider = QgsProviderRegistry.instance().providerMetadata(provider_key)
+                connection = provider.findConnection(conn_name)
+                
+                if connection:
+                    # SpatiaLite/SQLite doesn't have schemas, so we use "" as schema name
+                    tables = connection.tables("")
+                    
+                    for table in tables:
+                        # Get table columns
+                        fields = connection.fields("", table)
+                        
+                        columns = []
+                        for field in fields:
+                            columns.append({
+                                "name": field.name(),
+                                "type": field.typeName()
+                            })
+                        
+                        schema_info["tables"].append({
+                            "schema": "",
+                            "name": table,
+                            "columns": columns
+                        })
+            
+            elif provider_type == "MSSQL":
+                provider = QgsProviderRegistry.instance().providerMetadata('mssql')
+                connection = provider.findConnection(conn_name)
+                
+                if connection:
+                    # Get list of schemas
+                    schemas = connection.schemas()
+                    
+                    # For each schema, get the tables
+                    for schema in schemas:
+                        tables = connection.tables(schema)
+                        for table in tables:
+                            # Get table columns
+                            fields = connection.fields(schema, table)
+                            
+                            columns = []
+                            for field in fields:
+                                columns.append({
+                                    "name": field.name(),
+                                    "type": field.typeName()
+                                })
+                            
+                            schema_info["tables"].append({
+                                "schema": schema,
+                                "name": table,
+                                "columns": columns
+                            })
+            
+            return schema_info
+            
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error getting database schema: {str(e)}\n{traceback.format_exc()}", 
+                                    level=Qgis.Critical)
+            self.set_status(f"Error extracting database schema: {str(e)[:50]}...", "error")
+            return None
+
+    def get_layer_metadata(self, layer_selection):
+        """Get metadata information from the selected layer"""
+        try:
+            if layer_selection == "None":
+                return None
+            
+            self.set_status(f"Getting metadata for {layer_selection}...", "progress")
+            
+            # Parse the layer selection (Format: "GeometryType: LayerName")
+            parts = layer_selection.split(":", 1)
+            if len(parts) != 2:
+                return None
+                
+            layer_type = parts[0].strip()
+            layer_name = parts[1].strip()
+            
+            # Find the layer in the project
+            project = QgsProject.instance()
+            layer = None
+            
+            for lyr in project.mapLayers().values():
+                if lyr.name() == layer_name:
+                    layer = lyr
+                    break
+            
+            if not layer:
+                return None
+            
+            # Create metadata object
+            metadata = {
+                "name": layer.name(),
+                "type": layer_type,
+                "crs": layer.crs().authid() if hasattr(layer, 'crs') else "Unknown",
+                "provider": layer.providerType() if hasattr(layer, 'providerType') else "Unknown"
+            }
+            
+            # Get feature count and fields for vector layers
+            if layer.type() == QgsVectorLayer.VectorLayer:
+                metadata["featureCount"] = layer.featureCount()
+                
+                # Get fields information
+                fields = []
+                for field in layer.fields():
+                    field_info = {
+                        "name": field.name(),
+                        "type": field.typeName()
+                    }
+                    fields.append(field_info)
+                
+                metadata["fields"] = fields
+                
+                # Get extent
+                if layer.extent():
+                    extent = layer.extent()
+                    metadata["extent"] = {
+                        "xMin": extent.xMinimum(),
+                        "yMin": extent.yMinimum(),
+                        "xMax": extent.xMaximum(),
+                        "yMax": extent.yMaximum()
+                    }
+            
+            # For raster layers
+            elif layer.type() == QgsRasterLayer.RasterLayer:
+                # Get band count and data type
+                metadata["bandCount"] = layer.bandCount() if hasattr(layer, 'bandCount') else 0
+                metadata["dataType"] = layer.dataType(1) if hasattr(layer, 'dataType') else 0
+                
+                # Get extent
+                if layer.extent():
+                    extent = layer.extent()
+                    metadata["extent"] = {
+                        "xMin": extent.xMinimum(),
+                        "yMin": extent.yMinimum(),
+                        "xMax": extent.xMaximum(),
+                        "yMax": extent.yMaximum()
+                    }
+            
+            self.set_status(f"Layer metadata extracted", "success")
+            return metadata
+            
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error getting layer metadata: {str(e)}\n{traceback.format_exc()}", 
+                                    level=Qgis.Critical)
+            self.set_status(f"Error extracting layer metadata: {str(e)[:50]}...", "error")
+            return None
+
     def handle_status_update(self, message, status_type):
         """Handle status updates from the worker thread"""
         self.set_status(message, status_type)
@@ -471,11 +1092,20 @@ Only return the corrected code in a Python code block (enclosed in ```python and
                 
             # Switch to the full response tab
             self.tabWidgetResponse.setCurrentIndex(0)  # Full response tab
+        
+        # Make sure buttons are re-enabled
+        self.pushButtonSend.setEnabled(True)
+        if is_error_fix:
+            self.pushButtonFixCode.setEnabled(True)
             
     def handle_error(self, error_message):
         """Handle errors from the worker thread"""
         self.plainTextEditFullResponse.setPlainText(error_message)
         self.tabWidgetResponse.setCurrentIndex(0)  # Show full response tab
+        
+        # Make sure buttons are re-enabled
+        self.pushButtonSend.setEnabled(True)
+        self.pushButtonFixCode.setEnabled(True)
     
     def handle_error_log(self, error_log):
         """Update the error log tab with new error information"""
@@ -483,75 +1113,6 @@ Only return the corrected code in a Python code block (enclosed in ```python and
         self.last_error = error_log  # Save for potential error fixing
         self.pushButtonFixCode.setEnabled(True)  # Enable the fix button
         self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
-            
-    def execute_code(self):
-        """Execute the Python code in the QGIS environment."""
-        code = self.plainTextEditCode.toPlainText()
         
-        if not code:
-            self.set_status("No code to execute", "error")
-            return
-            
-        try:
-            self.set_status("Executing code...", "progress")
-            
-            # Disable button during execution
-            self.pushButtonExecute.setEnabled(False)
-            
-            # Save the code for potential error fixing
-            self.last_code = code
-            
-            # Clear previous error log
-            self.plainTextEditErrorLog.setPlainText("")
-            self.last_error = ""
-            self.pushButtonFixCode.setEnabled(False)
-            
-            # Capture stdout and stderr
-            stdout_buffer = io.StringIO()
-            stderr_buffer = io.StringIO()
-            
-            # Execute with output capturing
-            try:
-                with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-                    exec(code)
-                
-                stdout_output = stdout_buffer.getvalue()
-                stderr_output = stderr_buffer.getvalue()
-                
-                # Check for any stderr output
-                if stderr_output:
-                    # If there's stderr, consider it an error
-                    self.set_status("Code executed with errors", "warning")
-                    error_log = f"STDERR Output:\n{stderr_output}\n\nSTDOUT Output:\n{stdout_output}"
-                    self.plainTextEditErrorLog.setPlainText(error_log)
-                    self.last_error = error_log
-                    self.pushButtonFixCode.setEnabled(True)
-                    self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
-                    QMessageBox.warning(self, "Execution Warning", "Code executed with warnings or errors. See Error Log tab.")
-                else:
-                    # If stdout has content, show it in the error log tab as information
-                    if stdout_output:
-                        self.plainTextEditErrorLog.setPlainText(f"Code executed successfully.\n\nOutput:\n{stdout_output}")
-                        self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
-                    
-                    self.set_status("Code executed successfully", "success")
-                    QMessageBox.information(self, "Success", "Code executed successfully!")
-            
-            except Exception as e:
-                error_msg = f"Error executing code: {str(e)}"
-                tb_str = traceback.format_exc()
-                error_log = f"{error_msg}\n\n{tb_str}\n\nSTDOUT Output:\n{stdout_buffer.getvalue()}"
-                
-                # Update error log and switch to it
-                self.plainTextEditErrorLog.setPlainText(error_log)
-                self.last_error = error_log
-                self.pushButtonFixCode.setEnabled(True)
-                self.tabWidgetResponse.setCurrentIndex(2)  # Switch to error log tab
-                
-                self.set_status(error_msg, "error")
-                QgsMessageLog.logMessage(f"{error_msg}\n{tb_str}", level=Qgis.Critical)
-                QMessageBox.critical(self, "Error", error_msg)
-        
-        finally:
-            # Re-enable button
-            self.pushButtonExecute.setEnabled(True) 
+        # Make sure send button is re-enabled
+        self.pushButtonSend.setEnabled(True)

@@ -6,6 +6,7 @@
 
 
 A QGIS plugin that provides a simple interface to send prompts to various LLM providers and execute the generated Python code in QGIS.
+My Email: hamarshehmhmd@gmail.com
 
 
 

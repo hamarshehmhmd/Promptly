@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>QGISPromptExecutorDialogBase</class>
- <widget class="QDialog" name="QGISPromptExecutorDialogBase">
+ <class>PromptlyDialogBase</class>
+ <widget class="QDialog" name="PromptlyDialogBase">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -404,7 +404,7 @@
   <connection>
    <sender>button_box</sender>
    <signal>accepted()</signal>
-   <receiver>QGISPromptExecutorDialogBase</receiver>
+   <receiver>PromptlyDialogBase</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -420,7 +420,7 @@
   <connection>
    <sender>button_box</sender>
    <signal>rejected()</signal>
-   <receiver>QGISPromptExecutorDialogBase</receiver>
+   <receiver>PromptlyDialogBase</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

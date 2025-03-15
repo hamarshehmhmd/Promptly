@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 /***************************************************************************
- QGISPromptExecutor
+ Promptly
                                  A QGIS plugin
  Execute LLM-generated code for QGIS processing
 ***************************************************************************/
 """
 
 def classFactory(iface):
-    """Load QGISPromptExecutor class from file QGISPromptExecutor.
+    """Load Promptly class from file promptly.
     
     :param iface: A QGIS interface instance.
     :type iface: QgsInterface
     """
-    from .qgis_prompt_executor import QGISPromptExecutor
-    return QGISPromptExecutor(iface) 
+    from .promptly import Promptly
+    return Promptly(iface) 

@@ -6,6 +6,8 @@
 
 
 A QGIS plugin that provides a simple interface to send prompts to various LLM providers and execute the generated Python code in QGIS.
+
+Avaliable Now!! : https://plugins.qgis.org/plugins/promptly/
 My Email: hamarshehmhmd@gmail.com
 
 

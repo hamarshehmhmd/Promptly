@@ -2,10 +2,10 @@
 name=Promptly
 qgisMinimumVersion=3.0
 description=Execute LLM-generated code for QGIS processing. This plugin provides a simple interface to send prompts to various LLM providers (Ollama, OpenAI, OpenRouter, Anthropic, and custom endpoints) and execute the generated Python code in QGIS. It supports all major platforms (Windows, Linux, macOS) and includes features for database schema integration and layer metadata reference. Requirements: QGIS 3.0 or later, Python 3.x, Python 'requests' library (required for API communication). Installation Instructions: For Windows users - Install requests library using pip in QGIS Python environment (Open OSGeo4W Shell and run: pip install requests). For Linux/macOS users - Install using pip or system package manager.
-version=1.01
+version=2.0
 author=Mohammad Hamarsheh
 email=hamarshehmhmd@gmail.com
-about=This plugin provides a simple interface to send prompts to various LLM providers (Ollama, OpenAI, OpenRouter, Anthropic, and custom endpoints) and execute the generated Python code in QGIS. Features include: Support for multiple LLM providers, Database schema integration for SQL queries, Layer metadata reference for QGIS operations, Code execution with error handling and fixing, Cross-platform compatibility.
+about=This plugin provides an interface to send prompts to various LLM providers (Ollama, OpenAI, OpenRouter, Anthropic, and custom endpoints) and execute the generated Python code in QGIS. Features include: Support for multiple LLM providers, Database schema integration for SQL queries, Layer metadata reference for QGIS operations, Code execution with error handling and fixing, Cross-platform compatibility.
 tracker=https://github.com/hamarshehmhmd/promptly/issues
 repository=https://github.com/hamarshehmhmd/promptly
 homepage=https://github.com/hamarshehmhmd/promptly

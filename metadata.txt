@@ -13,7 +13,9 @@ category=Plugins
 icon=icons/icon.png
 hasProcessingProvider=no
 tags=python,llm,ai,ollama,openai,openrouter,anthropic,code generation
-changelog=0.1 - Initial release with support for multiple LLM providers
+changelog=2.0 - Major redesign with modern UI, tabbed interface for better organization, improved resizing capabilities, progress bar for visual feedback, consistent styling with CSS, customized icons, better layout proportions for all screen sizes
+    1.0 - Renamed plugin to Promptly, updated class references, improved code structure
+    0.1 - Initial release with support for multiple LLM providers
 experimental=False
 deprecated=False
 server=False 

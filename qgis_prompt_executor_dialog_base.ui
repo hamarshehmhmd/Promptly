@@ -6,9 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
+    <width>900</width>
     <height>800</height>
    </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>700</width>
+    <height>600</height>
+   </size>
   </property>
   <property name="windowTitle">
    <string>Promptly</string>
@@ -79,7 +85,22 @@ QPlainTextEdit {
 }
 </string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1,0">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <property name="leftMargin">
+    <number>12</number>
+   </property>
+   <property name="topMargin">
+    <number>12</number>
+   </property>
+   <property name="rightMargin">
+    <number>12</number>
+   </property>
+   <property name="bottomMargin">
+    <number>12</number>
+   </property>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayoutHeader">
      <item>
@@ -135,164 +156,336 @@ QPlainTextEdit {
      <property name="orientation">
       <enum>Qt::Vertical</enum>
      </property>
+     <property name="handleWidth">
+      <number>8</number>
+     </property>
+     <property name="childrenCollapsible">
+      <bool>false</bool>
+     </property>
      <widget class="QWidget" name="topWidget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>4</verstretch>
+       </sizepolicy>
+      </property>
       <layout class="QVBoxLayout" name="verticalLayout_7">
        <item>
-        <widget class="QGroupBox" name="groupBoxSettings">
-         <property name="title">
-          <string>LLM Settings</string>
+        <widget class="QTabWidget" name="settingsTabs">
+         <property name="currentIndex">
+          <number>0</number>
          </property>
-         <layout class="QGridLayout" name="gridLayout">
-          <item row="0" column="0">
-           <widget class="QLabel" name="labelProvider">
-            <property name="text">
-             <string>LLM Provider:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1" colspan="3">
-           <widget class="QComboBox" name="comboBoxProvider">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <item>
-             <property name="text">
-              <string>Ollama</string>
+         <widget class="QWidget" name="tabSettings">
+          <attribute name="title">
+           <string>LLM Settings</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="verticalLayout_9">
+           <item>
+            <layout class="QGridLayout" name="gridLayout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="labelProvider">
+               <property name="text">
+                <string>LLM Provider:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1" colspan="3">
+              <widget class="QComboBox" name="comboBoxProvider">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <item>
+                <property name="text">
+                 <string>Ollama</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>OpenAI</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>OpenRouter</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Anthropic</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Custom</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="labelModel">
+               <property name="text">
+                <string>Model:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1" colspan="3">
+              <widget class="QLineEdit" name="lineEditModel">
+               <property name="text">
+                <string>qwen2.5-coder:32b-instruct-q5_K_M</string>
+               </property>
+               <property name="placeholderText">
+                <string>Model name or ID</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="labelApiKey">
+               <property name="text">
+                <string>API Key:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1" colspan="3">
+              <widget class="QLineEdit" name="lineEditApiKey">
+               <property name="echoMode">
+                <enum>QLineEdit::Password</enum>
+               </property>
+               <property name="placeholderText">
+                <string>Not required for Ollama, required for other providers</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="labelServer">
+               <property name="text">
+                <string>API Endpoint:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1" colspan="3">
+              <widget class="QLineEdit" name="lineEditServer">
+               <property name="text">
+                <string>http://localhost:11434/api/generate</string>
+               </property>
+               <property name="placeholderText">
+                <string>API endpoint URL</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="labelTemperature">
+               <property name="text">
+                <string>Temperature:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QDoubleSpinBox" name="doubleSpinBoxTemperature">
+               <property name="decimals">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <double>2.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.100000000000000</double>
+               </property>
+               <property name="value">
+                <double>0.700000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="2">
+              <widget class="QLabel" name="labelMaxTokens">
+               <property name="text">
+                <string>Max Tokens:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="3">
+              <widget class="QSpinBox" name="spinBoxMaxTokens">
+               <property name="minimum">
+                <number>100</number>
+               </property>
+               <property name="maximum">
+                <number>100000</number>
+               </property>
+               <property name="singleStep">
+                <number>100</number>
+               </property>
+               <property name="value">
+                <number>4000</number>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <spacer name="verticalSpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
              </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>OpenAI</string>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
              </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>OpenRouter</string>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="tabResources">
+          <attribute name="title">
+           <string>Resources</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="verticalLayout_10">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayoutResources">
+             <item>
+              <widget class="QGroupBox" name="groupBoxDatabase">
+               <property name="title">
+                <string>Database Reference</string>
+               </property>
+               <layout class="QVBoxLayout" name="verticalLayout_11">
+                <item>
+                 <widget class="QLabel" name="labelDatabaseDesc">
+                  <property name="text">
+                   <string>Select a database to use as reference for SQL queries</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout">
+                  <item>
+                   <widget class="QComboBox" name="comboBoxSqlDatabase">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
+                    <item>
+                     <property name="text">
+                      <string>None</string>
+                     </property>
+                    </item>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="pushButtonRefreshDatabases">
+                    <property name="maximumSize">
+                     <size>
+                      <width>30</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>↻</string>
+                    </property>
+                    <property name="toolTip">
+                     <string>Refresh Database List</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QGroupBox" name="groupBoxLayer">
+               <property name="title">
+                <string>Layer Reference</string>
+               </property>
+               <layout class="QVBoxLayout" name="verticalLayout_12">
+                <item>
+                 <widget class="QLabel" name="labelLayerDesc">
+                  <property name="text">
+                   <string>Select a layer to use for metadata reference</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayoutLayer">
+                  <item>
+                   <widget class="QComboBox" name="comboBoxLayer">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
+                    <item>
+                     <property name="text">
+                      <string>None</string>
+                     </property>
+                    </item>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="pushButtonRefreshLayers">
+                    <property name="maximumSize">
+                     <size>
+                      <width>30</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>↻</string>
+                    </property>
+                    <property name="toolTip">
+                     <string>Refresh Layer List</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_2">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
              </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Anthropic</string>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
              </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Custom</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="labelModel">
-            <property name="text">
-             <string>Model:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1" colspan="3">
-           <widget class="QLineEdit" name="lineEditModel">
-            <property name="text">
-             <string>qwen2.5-coder:32b-instruct-q5_K_M</string>
-            </property>
-            <property name="placeholderText">
-             <string>Model name or ID</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="labelApiKey">
-            <property name="text">
-             <string>API Key:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1" colspan="3">
-           <widget class="QLineEdit" name="lineEditApiKey">
-            <property name="echoMode">
-             <enum>QLineEdit::Password</enum>
-            </property>
-            <property name="placeholderText">
-             <string>Not required for Ollama, required for other providers</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="labelServer">
-            <property name="text">
-             <string>API Endpoint:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1" colspan="3">
-           <widget class="QLineEdit" name="lineEditServer">
-            <property name="text">
-             <string>http://localhost:11434/api/generate</string>
-            </property>
-            <property name="placeholderText">
-             <string>API endpoint URL</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="labelTemperature">
-            <property name="text">
-             <string>Temperature:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="1">
-           <widget class="QDoubleSpinBox" name="doubleSpinBoxTemperature">
-            <property name="decimals">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <double>2.000000000000000</double>
-            </property>
-            <property name="singleStep">
-             <double>0.100000000000000</double>
-            </property>
-            <property name="value">
-             <double>0.700000000000000</double>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="2">
-           <widget class="QLabel" name="labelMaxTokens">
-            <property name="text">
-             <string>Max Tokens:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="3">
-           <widget class="QSpinBox" name="spinBoxMaxTokens">
-            <property name="minimum">
-             <number>100</number>
-            </property>
-            <property name="maximum">
-             <number>100000</number>
-            </property>
-            <property name="singleStep">
-             <number>100</number>
-            </property>
-            <property name="value">
-             <number>4000</number>
-            </property>
-           </widget>
-          </item>
-         </layout>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
         </widget>
        </item>
        <item>
         <widget class="QGroupBox" name="groupBoxPrompt">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="title">
           <string>Prompt</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
            <widget class="QPlainTextEdit" name="plainTextEditPrompt">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
             <property name="minimumSize">
              <size>
               <width>0</width>
@@ -305,90 +498,6 @@ QPlainTextEdit {
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayoutResources">
-            <item>
-             <widget class="QGroupBox" name="groupBoxDatabase">
-              <property name="title">
-               <string>Database Reference</string>
-              </property>
-              <layout class="QHBoxLayout" name="horizontalLayout">
-               <item>
-                <widget class="QComboBox" name="comboBoxSqlDatabase">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <item>
-                  <property name="text">
-                   <string>None</string>
-                  </property>
-                 </item>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="pushButtonRefreshDatabases">
-                 <property name="maximumSize">
-                  <size>
-                   <width>30</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <property name="text">
-                  <string>↻</string>
-                 </property>
-                 <property name="toolTip">
-                  <string>Refresh Database List</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-            </item>
-            <item>
-             <widget class="QGroupBox" name="groupBoxLayer">
-              <property name="title">
-               <string>Layer Reference</string>
-              </property>
-              <layout class="QHBoxLayout" name="horizontalLayoutLayer">
-               <item>
-                <widget class="QComboBox" name="comboBoxLayer">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <item>
-                  <property name="text">
-                   <string>None</string>
-                  </property>
-                 </item>
-                </widget>
-               </item>
-               <item>
-                <widget class="QPushButton" name="pushButtonRefreshLayers">
-                 <property name="maximumSize">
-                  <size>
-                   <width>30</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <property name="text">
-                  <string>↻</string>
-                 </property>
-                 <property name="toolTip">
-                  <string>Refresh Layer List</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-            </item>
-          </layout>
-         </item>
-         <item>
            <layout class="QHBoxLayout" name="horizontalLayoutSend">
             <item>
              <spacer name="horizontalSpacer_2">
@@ -447,6 +556,12 @@ QPlainTextEdit {
       </layout>
      </widget>
      <widget class="QWidget" name="bottomWidget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>6</verstretch>
+       </sizepolicy>
+      </property>
       <layout class="QVBoxLayout" name="verticalLayout_8">
        <item>
         <widget class="QGroupBox" name="groupBoxResponse">
@@ -456,10 +571,16 @@ QPlainTextEdit {
          <layout class="QVBoxLayout" name="verticalLayout_3">
           <item>
            <widget class="QTabWidget" name="tabWidgetResponse">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
             <property name="minimumSize">
              <size>
               <width>0</width>
-              <height>300</height>
+              <height>200</height>
              </size>
             </property>
             <property name="currentIndex">
@@ -472,6 +593,12 @@ QPlainTextEdit {
              <layout class="QVBoxLayout" name="verticalLayout_4">
               <item>
                <widget class="QPlainTextEdit" name="plainTextEditFullResponse">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="readOnly">
                  <bool>true</bool>
                 </property>
@@ -489,6 +616,12 @@ QPlainTextEdit {
              <layout class="QVBoxLayout" name="verticalLayout_5">
               <item>
                <widget class="QPlainTextEdit" name="plainTextEditCode">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="placeholderText">
                  <string>Extracted code will appear here. You can edit it before execution...</string>
                 </property>
@@ -537,6 +670,12 @@ QPlainTextEdit {
              <layout class="QVBoxLayout" name="verticalLayout_6">
               <item>
                <widget class="QPlainTextEdit" name="plainTextEditErrorLog">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="readOnly">
                  <bool>true</bool>
                 </property>
@@ -592,6 +731,16 @@ QPlainTextEdit {
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayoutFooter">
+     <item>
+      <widget class="QProgressBar" name="progressBar">
+       <property name="value">
+        <number>0</number>
+       </property>
+       <property name="textVisible">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
      <item>
       <widget class="QLabel" name="labelStatus">
        <property name="text">

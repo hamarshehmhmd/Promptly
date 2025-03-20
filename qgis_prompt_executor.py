@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 /***************************************************************************
- QGISPromptExecutor
+ Promptly
                                  A QGIS plugin
  Execute LLM-generated code for QGIS processing
 ***************************************************************************/
@@ -15,7 +15,7 @@ from qgis.PyQt.QtWidgets import QAction
 from .qgis_prompt_executor_dialog import QGISPromptExecutorDialog
 
 
-class QGISPromptExecutor:
+class Promptly:
     """QGIS Plugin Implementation."""
 
     def __init__(self, iface):
@@ -33,9 +33,9 @@ class QGISPromptExecutor:
         
         # Declare instance attributes
         self.actions = []
-        self.menu = 'QGIS Prompt Executor'
-        self.toolbar = self.iface.addToolBar('QGISPromptExecutor')
-        self.toolbar.setObjectName('QGISPromptExecutorToolbar')
+        self.menu = 'Promptly'
+        self.toolbar = self.iface.addToolBar('Promptly')
+        self.toolbar.setObjectName('PromptlyToolbar')
         
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -125,7 +125,7 @@ class QGISPromptExecutor:
             
         self.add_action(
             icon_path,
-            text="QGIS Prompt Executor",
+            text="Promptly",
             callback=self.run,
             parent=self.iface.mainWindow())
 
@@ -136,7 +136,7 @@ class QGISPromptExecutor:
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginMenu(
-                'QGIS Prompt Executor',
+                'Promptly',
                 action)
             self.iface.removeToolBarIcon(action)
         # remove the toolbar

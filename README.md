@@ -1,4 +1,5 @@
 
+
 <div align="left">
   <img src="icons/icon.png" alt="promptly Logo" width=fit>
   <h1>Promptly</h1>
@@ -32,7 +33,7 @@ A QGIS plugin that provides a simple interface to send prompts to various LLM pr
 ## Installation
 
 1. Download or clone this repository.
-2. Copy `QGISPromptExecutor` to the QGIS plugins directory:
+2. Copy `Promptly` to the QGIS plugins directory:
    - **Windows:** `C:\Users\{username}\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins`
    - **Linux:** `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins`
    - **macOS:** `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins`
@@ -86,4 +87,3 @@ A QGIS plugin that provides a simple interface to send prompts to various LLM pr
 ## License
 
 This plugin is licensed under the [MIT License](LICENSE).
-
